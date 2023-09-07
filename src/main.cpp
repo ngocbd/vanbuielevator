@@ -28,11 +28,34 @@ BluetoothSerial SerialBT;
 #define SECOND_FLOOR_PRESS '2'
 #define THIRD_FLOOR_PRESS '3'
 
+
+
+#define ENGINE_UP_PIN 23
+#define ENGINE_DOWN_PIN 22
+
+
+#define TRIGGER_FIRST_FLOOR_DOWN 25
+#define TRIGGER_SECOND_FLOOR_DOWN 26
+#define TRIGGER_THIRD_FLOOR_DOWN 27
+
+
+
 byte current_pos = SECOND_FLOOR;
 byte current_status = STOP;
 
 void setup() {
   Serial.begin(115200);
+
+  // setup pins mode for engine
+  pinMode(ENGINE_UP_PIN, OUTPUT);
+  pinMode(ENGINE_DOWN_PIN, OUTPUT);
+
+  // setup pins mode for trigger
+  pinMode(TRIGGER_FIRST_FLOOR_DOWN, INPUT);
+  pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT);
+  pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT);
+
+  // setup bluetooth
   SerialBT.begin("ONGNOI"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
 }
@@ -58,9 +81,12 @@ void loop() {
         
       }
       else if(current_pos == SECOND_FLOOR){
+        digitalWrite(ENGINE_DOWN_PIN, HIGH);
+
         Serial.write("MOVING DOWN");
       }
       else if(current_pos == THIRD_FLOOR){
+         digitalWrite(ENGINE_DOWN_PIN, HIGH);
         Serial.write("MOVING DOWN");
       }
       
