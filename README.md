@@ -103,3 +103,8 @@ if(data == WHAT_STATUS){
     }
 ```
 
+## Quá trình vận hành
+###Quá trình vận hành thang máy cần 3 giai đoạn 
+1.Gọi thang máy đến tầng X ( thang máy có thể đang ở bất kỳ đâu)
+2.Người lên => Vận chuyển đến tầng Y
+3.Thang máy rảnh và tự trở về tầng 2 ngủ
