@@ -31,6 +31,19 @@
 
 ## Sơ đồ mạch điều khiển ESP32
 
+- Cài đặt cơ bản tốc độ cổng serial ( monitor)
+
+```c++
+Serial.begin(115200);
+```
+monitor_speed = 115200
+- Cài đặt điều khiển bằng Bluetooth tên thiết bị là ONGNOI
+
+```c++
+
+SerialBT.begin("ONGNOI"); //Bluetooth device name
+```
+
 - Chân điều khiển động cơ kéo lên là chân 23 ( được setup OUTPUT)
 - Chân điều khiển động cơ nhả xuống là chân 22 ( được setup OUTPUT)
 
@@ -54,3 +67,39 @@
   pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT);
   pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT);
 ```
+
+- Tập lệnh điều khiển từ Bluetooth
+
+
+```c++
+#define WHERE_ARE_YOU 'w'
+#define WHAT_STATUS 's'
+#define FIRST_FLOOR_PRESS '1'
+#define SECOND_FLOOR_PRESS '2'
+#define THIRD_FLOOR_PRESS '3'
+```
+
+- Lệnh w dùng để hỏi xem thang máy đang ở đâu ( kết quả trả về cho thiết bị hỏi là một trong các giá trị 1,2,3 tương ứng với 3 tầng như dưới)
+```c++
+#define FIRST_FLOOR 1
+#define SECOND_FLOOR 2
+#define THIRD_FLOOR 3
+
+if(data == WHERE_ARE_YOU){
+      Serial.write("WHERE_ARE_YOU CMD ");
+      SerialBT.write(to_char(current_pos));
+    }
+
+```
+- Lệnh s dùng để hỏi trạng thái của thang máy ( kết quả sẽ là đang lên, đang xuống , đang đứng yên)
+```c++
+#define UP 1
+#define DOWN 2
+#define STOP 0
+
+if(data == WHAT_STATUS){
+      Serial.write("WHAT_STATUS CMD ");
+      SerialBT.write(to_char(current_status));
+    }
+```
+
