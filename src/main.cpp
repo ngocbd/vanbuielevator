@@ -28,7 +28,7 @@ BluetoothSerial SerialBT;
 #define SECOND_FLOOR_PRESS '2'
 #define THIRD_FLOOR_PRESS '3'
 
-
+#define FORCE_STOP 'f'
 
 #define ENGINE_UP_PIN 23
 #define ENGINE_DOWN_PIN 22
@@ -63,11 +63,12 @@ void setup() {
 char to_char(byte data) {
   return data+48;
 }
-int gotoSleep() {
-  // move to second floor to sleep
-  if (current_pos != SECOND_FLOOR) {
-    moveToFloor(SECOND_FLOOR);
-  }
+
+int forceStop(){
+  digitalWrite(ENGINE_UP_PIN, LOW);
+  digitalWrite(ENGINE_DOWN_PIN, LOW);
+  current_status = STOP;
+  return 0;
 }
 
 int moveToFloor(int floor) {
@@ -81,28 +82,51 @@ int moveToFloor(int floor) {
   else if(current_pos < floor) {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     digitalWrite(ENGINE_UP_PIN, HIGH);
+    current_status = UP;
     return 1;
   }
   else if(current_pos > floor) {
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, HIGH);
+    current_status = DOWN;
     return 2;
   }
+}
+int gotoSleep() {
+  // move to second floor to sleep
+  if (current_pos != SECOND_FLOOR) {
+    return moveToFloor(SECOND_FLOOR);
+    
+  }
+  return 0;
 }
 void loop() {
   if (SerialBT.available()) {
     byte data = SerialBT.read();
-    if(data == WHERE_ARE_YOU){
+    if(data == WHERE_ARE_YOU) {
       Serial.write("WHERE_ARE_YOU CMD ");
       SerialBT.write(to_char(current_pos));
     }
-    else if(data == WHAT_STATUS){
+    else if(data == WHAT_STATUS) {
       Serial.write("WHAT_STATUS CMD ");
       SerialBT.write(to_char(current_status));
     }
-    else if(data == FIRST_FLOOR_PRESS){
+    else if(data == FIRST_FLOOR_PRESS) {
+      Serial.write("FIRST_FLOOR_PRESS CMD ");
       moveToFloor(FIRST_FLOOR);
       
+    }
+    else if(data == FORCE_STOP) {
+      Serial.write("FORCE_STOP CMD ");
+      forceStop();
+    }
+    else if(data == SECOND_FLOOR_PRESS) {
+      Serial.write("SECOND_FLOOR_PRESS CMD ");
+      moveToFloor(SECOND_FLOOR);
+    }
+    else if(data == THIRD_FLOOR_PRESS) {
+      Serial.write("THIRD_FLOOR_PRESS CMD ");
+      moveToFloor(THIRD_FLOOR);
     }
     else{
       Serial.write(data);

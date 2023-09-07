@@ -31,6 +31,7 @@
 
 ## Sơ đồ mạch điều khiển ESP32
 
+![ Sơ đồ mạch điều khiển ESP32 DOIT Devkit v1 ](https://mischianti.org/wp-content/uploads/2020/11/ESP32-DOIT-DEV-KIT-v1-pinout-mischianti.png)
 - Cài đặt cơ bản tốc độ cổng serial ( monitor)
 
 ```c++
