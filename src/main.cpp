@@ -42,6 +42,7 @@ BluetoothSerial SerialBT;
 
 byte current_pos = SECOND_FLOOR;
 byte current_status = STOP;
+byte target_floor = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -59,10 +60,35 @@ void setup() {
   SerialBT.begin("ONGNOI"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
 }
-char to_char(byte data){
+char to_char(byte data) {
   return data+48;
 }
+int gotoSleep() {
+  // move to second floor to sleep
+  if (current_pos != SECOND_FLOOR) {
+    moveToFloor(SECOND_FLOOR);
+  }
+}
 
+int moveToFloor(int floor) {
+  // Only move if the elevator is stoped
+  if (current_status != STOP) {
+    return 0;
+  }
+  if(current_pos == floor) {
+    return 0;
+  }
+  else if(current_pos < floor) {
+    digitalWrite(ENGINE_DOWN_PIN, LOW);
+    digitalWrite(ENGINE_UP_PIN, HIGH);
+    return 1;
+  }
+  else if(current_pos > floor) {
+    digitalWrite(ENGINE_UP_PIN, LOW);
+    digitalWrite(ENGINE_DOWN_PIN, HIGH);
+    return 2;
+  }
+}
 void loop() {
   if (SerialBT.available()) {
     byte data = SerialBT.read();
@@ -75,20 +101,7 @@ void loop() {
       SerialBT.write(to_char(current_status));
     }
     else if(data == FIRST_FLOOR_PRESS){
-      Serial.write("FIRST_FLOOR CMD ");
-      if(current_pos == FIRST_FLOOR){
-        Serial.write("YOU ARE IN FIRST_FLOOR ALREADY");
-        
-      }
-      else if(current_pos == SECOND_FLOOR){
-        digitalWrite(ENGINE_DOWN_PIN, HIGH);
-
-        Serial.write("MOVING DOWN");
-      }
-      else if(current_pos == THIRD_FLOOR){
-         digitalWrite(ENGINE_DOWN_PIN, HIGH);
-        Serial.write("MOVING DOWN");
-      }
+      moveToFloor(FIRST_FLOOR);
       
     }
     else{
