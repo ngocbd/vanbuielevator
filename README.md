@@ -78,6 +78,7 @@ SerialBT.begin("ONGNOI"); //Bluetooth device name
 #define FIRST_FLOOR_PRESS '1'
 #define SECOND_FLOOR_PRESS '2'
 #define THIRD_FLOOR_PRESS '3'
+#define TRIGGER_STATUS 't'
 ```
 
 - Lệnh w dùng để hỏi xem thang máy đang ở đâu ( kết quả trả về cho thiết bị hỏi là một trong các giá trị 1,2,3 tương ứng với 3 tầng như dưới)
