@@ -104,10 +104,24 @@ if(data == WHAT_STATUS){
     }
 ```
 
+- Lệnh t dùng để hỏi trạng thái của của các trigger  
+```c++
+ if (data == TRIGGER_STATUS) {
+      SerialBT.write(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN)));
+      SerialBT.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
+      SerialBT.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
+    }
+```
+
+
+
 ## Quá trình vận hành
 ### Quá trình vận hành thang máy cần 3 giai đoạn 
 1. Gọi thang máy đến tầng X ( thang máy có thể đang ở bất kỳ đâu)
 2. Người lên => Vận chuyển đến tầng Y ( bước 1 và 2 có thể xảy ra nhiều lần)
 3. Thang máy rảnh và tự trở về tầng 2 ngủ
 
-
+### Tạm thời
+1. Tạm thời chưa làm chức năng chọn tầng khi di chuyển , dùng tạm chức năng gọi thang để di chuyển
+2. Tạm thời khi trigger được bặt nó sẽ dừng mà không cần biết tầng cần di chuyển là tầng nào do (1)
+3. Tạm thời chưa có bộ đếm thời gian để tính khi nào sẽ chuyển thang máy sang trạng thái ngủ (Chuyển về tầng 2)
