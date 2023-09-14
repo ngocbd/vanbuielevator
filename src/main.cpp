@@ -27,6 +27,8 @@ BluetoothSerial SerialBT;
 #define FIRST_FLOOR_PRESS '1'
 #define SECOND_FLOOR_PRESS '2'
 #define THIRD_FLOOR_PRESS '3'
+#define TRIGGER_STATUS 't'
+
 
 #define FORCE_STOP 'f'
 
@@ -65,6 +67,9 @@ char to_char(byte data) {
 }
 
 int forceStop(){
+  if(current_status == STOP) {
+    return 0;
+  }
   digitalWrite(ENGINE_UP_PIN, LOW);
   digitalWrite(ENGINE_DOWN_PIN, LOW);
   current_status = STOP;
@@ -91,6 +96,7 @@ int moveToFloor(int floor) {
     current_status = DOWN;
     return 2;
   }
+  return 0;
 }
 int gotoSleep() {
   // move to second floor to sleep
@@ -100,10 +106,53 @@ int gotoSleep() {
   }
   return 0;
 }
+char digitalToString(byte data) {
+  if (data == HIGH) {
+    return 'H';
+  }
+  else {
+    return 'L';
+  }
+}
 void loop() {
+
+
+  
+  if (digitalRead(TRIGGER_FIRST_FLOOR_DOWN) == HIGH)
+  {
+    current_pos = FIRST_FLOOR;
+
+    forceStop();
+  }
+  if (digitalRead(TRIGGER_SECOND_FLOOR_DOWN) == HIGH)
+  {
+    current_pos = SECOND_FLOOR;
+    forceStop();
+  }
+    if (digitalRead(TRIGGER_THIRD_FLOOR_DOWN) == HIGH)
+  {
+    current_pos = THIRD_FLOOR;
+    forceStop();
+  }
+    
+
   if (SerialBT.available()) {
+
+    /* Logic for stop elevator when button trigged*/
+
+
+
+
+
+
+
     byte data = SerialBT.read();
-    if(data == WHERE_ARE_YOU) {
+    if (data == TRIGGER_STATUS) {
+      SerialBT.write(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN)));
+      SerialBT.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
+      SerialBT.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
+    }
+    else if(data == WHERE_ARE_YOU) {
       Serial.write("WHERE_ARE_YOU CMD ");
       SerialBT.write(to_char(current_pos));
     }
