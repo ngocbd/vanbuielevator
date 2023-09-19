@@ -73,7 +73,7 @@ int forceStop(){
   digitalWrite(ENGINE_UP_PIN, LOW);
   digitalWrite(ENGINE_DOWN_PIN, LOW);
   current_status = STOP;
-  return 0;
+  return 1;
 }
 
 int moveToFloor(int floor) {
@@ -84,7 +84,8 @@ int moveToFloor(int floor) {
   if(current_pos == floor) {
     return 0;
   }
-  else if(current_pos < floor) {
+  target_floor = floor;
+  if(current_pos < floor) {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     digitalWrite(ENGINE_UP_PIN, HIGH);
     current_status = UP;
@@ -114,25 +115,51 @@ char digitalToString(byte data) {
     return 'L';
   }
 }
+char *statusToString(byte data) {
+  if (data == UP) {
+    return "UP";
+  }
+  else if(data == DOWN) {
+    return "DOWN";
+  }
+  else {
+    return "STOP";
+  }
+}
 void loop() {
 
 
   
-  if (digitalRead(TRIGGER_FIRST_FLOOR_DOWN) == HIGH)
-  {
+  if (digitalRead(TRIGGER_FIRST_FLOOR_DOWN) == HIGH)  {
+    Serial.write("TRIGGER_FIRST_FLOOR_DOWN");
     current_pos = FIRST_FLOOR;
+    
+    if((target_floor == FIRST_FLOOR) && (current_status == DOWN)) {
+      forceStop();
+      return;
+    }
+    
+  }
 
-    forceStop();
-  }
-  if (digitalRead(TRIGGER_SECOND_FLOOR_DOWN) == HIGH)
-  {
+  if (digitalRead(TRIGGER_SECOND_FLOOR_DOWN) == HIGH)  {
+    Serial.write("TRIGGER_SECOND_FLOOR_DOWN");
     current_pos = SECOND_FLOOR;
-    forceStop();
+
+
+
+     if(target_floor == SECOND_FLOOR) {
+      forceStop();
+      return;
+    }
   }
-    if (digitalRead(TRIGGER_THIRD_FLOOR_DOWN) == HIGH)
-  {
+
+  if (digitalRead(TRIGGER_THIRD_FLOOR_DOWN) == HIGH)  {
+    Serial.write("TRIGGER_THIRD_FLOOR_DOWN");
     current_pos = THIRD_FLOOR;
-    forceStop();
+    if((target_floor == THIRD_FLOOR) && (current_status == UP)) {
+      forceStop();
+      return;
+    }
   }
     
 
@@ -160,14 +187,14 @@ void loop() {
       Serial.write("WHAT_STATUS CMD ");
       SerialBT.write(to_char(current_status));
     }
+    else if(data == FORCE_STOP) {
+      Serial.write("FORCE_STOP CMD ");
+      forceStop();
+    }
     else if(data == FIRST_FLOOR_PRESS) {
       Serial.write("FIRST_FLOOR_PRESS CMD ");
       moveToFloor(FIRST_FLOOR);
       
-    }
-    else if(data == FORCE_STOP) {
-      Serial.write("FORCE_STOP CMD ");
-      forceStop();
     }
     else if(data == SECOND_FLOOR_PRESS) {
       Serial.write("SECOND_FLOOR_PRESS CMD ");
