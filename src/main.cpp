@@ -5,6 +5,9 @@
 //and also demonstrate that SerialBT have the same functionalities of a normal Serial
 
 #include "BluetoothSerial.h"
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
 
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
@@ -12,6 +15,13 @@
 #endif
 
 BluetoothSerial SerialBT;
+BLEDevice BLE;
+
+
+BLEServer* pServer;
+BLEService* pService;
+BLECharacteristic* pCharacteristic;
+
 
 
 #define TOTAL_FLOORS 3
@@ -48,8 +58,12 @@ byte current_pos = SECOND_FLOOR;
 byte current_status = STOP;
 byte target_floor = 0;
 
+
 void setup() {
   Serial.begin(115200);
+  // setup bluetooth
+  SerialBT.begin("ONGNOII1"); //Bluetooth device name
+  Serial.println("The device started, now you can pair it with bluetooth!");
 
   // setup pins mode for engine
   pinMode(ENGINE_UP_PIN, OUTPUT);
@@ -60,11 +74,36 @@ void setup() {
   pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT_PULLDOWN );
   pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT_PULLDOWN );
 
-  // setup bluetooth
-  SerialBT.begin("ONGNOI"); //Bluetooth device name
-  Serial.println("The device started, now you can pair it with bluetooth!");
-  
+
+   // Khởi tạo BLE
+   BLEDevice::init("ONGNOI"); // Đặt tên của thiết bị
+
+  // Tạo một BLE Server
+  pServer = BLEDevice::createServer();
+ 
+
+  // Tạo một BLE Service
+  pService = pServer->createService(BLEUUID("00001234-0000-1000-8000-00805f9b34fb")); // Service Generic Access
+
+  // Tạo một BLE Characteristic và thêm vào Service
+  pCharacteristic = pService->createCharacteristic(
+      BLEUUID("00001001-0000-1000-8000-00805f9b34fb"), // Characteristic Device Name
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE
+  );
+
+
+  // Thêm Characteristic vào Service
+  pService->addCharacteristic(pCharacteristic);
+
+  // Đăng ký Service với Server
+  pService->start();
+
+  // Bắt đầu quảng bá tên
+  pServer->getAdvertising()->start();
 }
+  
+
 char to_char(byte data) {
   return data+48;
 } 
@@ -81,26 +120,25 @@ int forceStop(){
 int ideTime = 0;
 int moveToFloor(int floor) {
   // Only move if the elevator is stoped
-  if (current_status != STOP) {
-    return 0;
-  }
   if(current_pos == floor) {
+    current_status = STOP;
     return 0;
   }
   ideTime = 0;
   target_floor = floor;
-  if(current_pos < floor) {
+  if(current_pos < target_floor) {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     digitalWrite(ENGINE_UP_PIN, HIGH);
     current_status = UP;
     return 1;
   }
-  else if(current_pos > floor) {
+  else if(current_pos > target_floor) {
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, HIGH);
     current_status = DOWN;
     return 2;
   }
+  
   return 0;
 }
 
@@ -161,17 +199,66 @@ void loop() {
     }
     return; 
   }
+  if(pCharacteristic->getValue().length() > 0){
+      std::string value = pCharacteristic->getValue();
+      char data = (char)value[0];  // Chuyển giá trị Uint8 thành ký tự ASCII
+      if (data == TRIGGER_STATUS) {
+      uint8_t triggerValues[3] = {
+        static_cast<uint8_t>(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN))),
+        static_cast<uint8_t>(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN))),
+        static_cast<uint8_t>(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)))
+      };
+      pCharacteristic->setValue(triggerValues, sizeof(triggerValues));
+      Serial.write(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN)));
+      Serial.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
+      Serial.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
+    }
+    else if(data == IDLE_TIME) {
+      Serial.write("IDLE_TIME CMD ");
+      uint8_t ideTimeByte = static_cast<uint8_t>(ideTime);
+      pCharacteristic->setValue(&ideTimeByte, sizeof(ideTimeByte));
+      Serial.println();
+      
+    }
+    else if(data == FORCE_STOP) {
+      Serial.write("FORCE_STOP CMD ");
+      forceStop();
+    }
+    else if(data == FIRST_FLOOR_PRESS) {
+      Serial.write("FIRST_FLOOR_PRESS CMD ");
+      moveToFloor(FIRST_FLOOR);
+      
+      
+    }
+    else if(data == SECOND_FLOOR_PRESS) {
+      Serial.write("SECOND_FLOOR_PRESS CMD ");
+      moveToFloor(SECOND_FLOOR);
+      
+    }
+    else if(data == THIRD_FLOOR_PRESS) {
+      Serial.write("THIRD_FLOOR_PRESS CMD ");
+      moveToFloor(THIRD_FLOOR);
+      
+    }
+    else if(data == WHERE_ARE_YOU) {
+      Serial.write("WHERE_ARE_YOU CMD ");
+      Serial.write(data);
+      pCharacteristic->setValue(&current_pos, sizeof(current_pos));
+      Serial.println();
+      
+    }
+    else if(data == WHAT_STATUS) {
+      Serial.write("WHAT_STATUS CMD ");
+      Serial.write(data);
+      pCharacteristic->setValue(&current_status, sizeof(current_status));
+      Serial.println();
+    }
     
-
+  }
+        
   if (SerialBT.available()) {
 
     /* Logic for stop elevator when button trigged*/
-
-
-
-
-
-
 
     byte data = SerialBT.read();
     if (data == TRIGGER_STATUS) {
