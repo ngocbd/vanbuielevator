@@ -130,12 +130,20 @@ int moveToFloor(int floor) {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     digitalWrite(ENGINE_UP_PIN, HIGH);
     current_status = UP;
+    delay(4000);
+    if(current_status == UP){
+      current_pos = floor;
+    }
     return 1;
   }
   else if(current_pos > target_floor) {
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, HIGH);
     current_status = DOWN;
+    delay(4000);
+    if(current_status == DOWN){
+      current_pos = floor;
+    }
     return 2;
   }
   
