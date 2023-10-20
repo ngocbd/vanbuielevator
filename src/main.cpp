@@ -47,6 +47,9 @@ BLECharacteristic* pCharacteristic;
 #define ENGINE_UP_PIN 23
 #define ENGINE_DOWN_PIN 22
 
+#define ONEST_FLOOR 18
+#define TWOND_FLOOR 19
+#define THREE_FLOOR 21
 
 #define TRIGGER_FIRST_FLOOR_DOWN 25
 #define TRIGGER_SECOND_FLOOR_DOWN 26
@@ -74,18 +77,22 @@ void setup() {
   pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT_PULLDOWN );
   pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT_PULLDOWN );
 
+  //setup pins mode for button in elevator
+  pinMode(ONEST_FLOOR, INPUT_PULLDOWN);
+  pinMode(TWOND_FLOOR, INPUT_PULLDOWN);
+  pinMode(THREE_FLOOR, INPUT_PULLDOWN);
 
-   // Khởi tạo BLE
-   BLEDevice::init("ONGNOI"); // Đặt tên của thiết bị
+   // Initialize BLE
+   BLEDevice::init("ONGNOI"); // Set the name of the device
 
-  // Tạo một BLE Server
+  // Create a BLE Server
   pServer = BLEDevice::createServer();
  
 
-  // Tạo một BLE Service
+  // Create a BLE Service
   pService = pServer->createService(BLEUUID("00001234-0000-1000-8000-00805f9b34fb")); // Service Generic Access
 
-  // Tạo một BLE Characteristic và thêm vào Service
+  // Create a BLE Characteristic and add it to Service
   pCharacteristic = pService->createCharacteristic(
       BLEUUID("00001001-0000-1000-8000-00805f9b34fb"), // Characteristic Device Name
       BLECharacteristic::PROPERTY_READ |
@@ -93,13 +100,13 @@ void setup() {
   );
 
 
-  // Thêm Characteristic vào Service
+  // Add Characteristics to Service
   pService->addCharacteristic(pCharacteristic);
 
-  // Đăng ký Service với Server
+  // Register Service with Server
   pService->start();
 
-  // Bắt đầu quảng bá tên
+  // Start promoting the name
   pServer->getAdvertising()->start();
 }
   
@@ -121,7 +128,7 @@ int ideTime = 0;
 int moveToFloor(int floor) {
   // Only move if the elevator is stoped
   if(current_pos == floor) {
-    current_status = STOP;
+    // current_status = STOP;
     return 0;
   }
   ideTime = 0;
@@ -130,8 +137,8 @@ int moveToFloor(int floor) {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     digitalWrite(ENGINE_UP_PIN, HIGH);
     current_status = UP;
-    delay(4000);
-    if(current_status == UP){
+    delay(1000);
+    if(current_status == UP) {
       current_pos = floor;
     }
     return 1;
@@ -139,14 +146,13 @@ int moveToFloor(int floor) {
   else if(current_pos > target_floor) {
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, HIGH);
-    current_status = DOWN;
-    delay(4000);
-    if(current_status == DOWN){
-      current_pos = floor;
-    }
+     current_status = DOWN;
+     delay(1000);
+     if(current_status == DOWN){
+       current_pos = floor;
+     }
     return 2;
   }
-  
   return 0;
 }
 
@@ -154,7 +160,6 @@ int gotoSleep() {
   // move to second floor to sleep
   if (current_pos != SECOND_FLOOR) {
     return moveToFloor(SECOND_FLOOR);
-    
   }
   return 0;
 }
@@ -177,23 +182,19 @@ void loop() {
   if (digitalRead(TRIGGER_FIRST_FLOOR_DOWN) == HIGH)  {
     Serial.write("TRIGGER_FIRST_FLOOR_DOWN");
     current_pos = FIRST_FLOOR;
-    
+    ideTime = 0;
     if((target_floor == FIRST_FLOOR) && (current_status == DOWN)) {
       forceStop();
-      
     }
-    return;
-    
+    return; 
   }
 
   if (digitalRead(TRIGGER_SECOND_FLOOR_DOWN) == HIGH)  {
     Serial.write("TRIGGER_SECOND_FLOOR_DOWN");
-    current_pos = SECOND_FLOOR; 
-
-
+    current_pos = SECOND_FLOOR;
+    ideTime = 0;
      if(target_floor == SECOND_FLOOR) {
       forceStop();
-      
     }
     return;
   }
@@ -201,9 +202,9 @@ void loop() {
   if (digitalRead(TRIGGER_THIRD_FLOOR_DOWN) == HIGH)  {
     Serial.write("TRIGGER_THIRD_FLOOR_DOWN");
     current_pos = THIRD_FLOOR;
+    ideTime = 0;
     if((target_floor == THIRD_FLOOR) && (current_status == UP)) {
       forceStop();
-      
     }
     return; 
   }
@@ -234,9 +235,7 @@ void loop() {
     }
     else if(data == FIRST_FLOOR_PRESS) {
       Serial.write("FIRST_FLOOR_PRESS CMD ");
-      moveToFloor(FIRST_FLOOR);
-      
-      
+      moveToFloor(FIRST_FLOOR);  
     }
     else if(data == SECOND_FLOOR_PRESS) {
       Serial.write("SECOND_FLOOR_PRESS CMD ");
@@ -307,8 +306,26 @@ void loop() {
     else{
       Serial.write(data);
     }
-    
+  }
+
+  if (digitalRead(ONEST_FLOOR) == HIGH) {
+    moveToFloor(FIRST_FLOOR);
+    Serial.print("ONEST_FLOOR");
+    Serial.println();
+    return;
+  }
+  if (digitalRead(TWOND_FLOOR) == HIGH) {
+    moveToFloor(SECOND_FLOOR);
+    Serial.print("TWOND_FLOOR");
+    Serial.println();
+    return;
   }
   
-  
+  if (digitalRead(THREE_FLOOR) == HIGH) {
+    moveToFloor(THIRD_FLOOR);
+    Serial.print("THREE_FLOOR");
+    Serial.println();
+    return;
+  }
+ 
 }

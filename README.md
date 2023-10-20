@@ -41,8 +41,30 @@ monitor_speed = 115200
 - Cài đặt điều khiển bằng Bluetooth tên thiết bị là ONGNOI
 
 ```c++
-
 SerialBT.begin("ONGNOI"); //Bluetooth device name
+
++ Đối với Web Bluetooth API , cần thêm thư viện Bluetooth Low Energy
+BLEDevice::init("ONGNOI"); // Set the name of the device
+ // Create a BLE Service
+  pService = pServer->createService(BLEUUID("Your UUID")); // Service Generic Access
+
+  // Create a BLE Characteristic and add it to Service
+  pCharacteristic = pService->createCharacteristic(
+      BLEUUID("Your UUID"), // Characteristic Device Name
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE
+  );
+
+
+  // Add Characteristics to Service
+  pService->addCharacteristic(pCharacteristic);
+
+  // Register Service with Server
+  pService->start();
+
+  // Start promoting the name
+  pServer->getAdvertising()->start();
+
 ```
 
 - Chân điều khiển động cơ kéo lên là chân 23 ( được setup OUTPUT)
@@ -57,18 +79,27 @@ SerialBT.begin("ONGNOI"); //Bluetooth device name
   pinMode(ENGINE_DOWN_PIN, OUTPUT);
 
 ```
-- Chân điều nhận tín hiệu từ cảm biến khi đến các tầng 1,2,3 lần lượt là 25,26,27 ( được setup INPUT)
+- Chân điều nhận tín hiệu từ cảm biến khi đến các tầng 1,2,3 lần lượt là 25,26,27 ( được setup INPUT_PULLDOWN)
   
 ```C++
 #define TRIGGER_FIRST_FLOOR_DOWN 25
 #define TRIGGER_SECOND_FLOOR_DOWN 26
 #define TRIGGER_THIRD_FLOOR_DOWN 27
  // setup pins mode for trigger
-  pinMode(TRIGGER_FIRST_FLOOR_DOWN, INPUT);
-  pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT);
-  pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT);
+  pinMode(TRIGGER_FIRST_FLOOR_DOWN, INPUT_PULLDOWN );
+  pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT_PULLDOWN );
+  pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT_PULLDOWN );
 ```
-
+- Chân nhận tín hiệu điều khiển các nút ở bên trong thang máy khi đến các tầng 1, 2 ,3 lần lượt là 18,19,21(được setup INPUT_PULLDOWN)
+````C++
+  #define ONEST_FLOOR 18
+  #define TWOND_FLOOR 19
+  #define THREE_FLOOR 21
+  //setup pins mode for button in elevator
+  pinMode(ONEST_FLOOR, INPUT_PULLDOWN);
+  pinMode(TWOND_FLOOR, INPUT_PULLDOWN);
+  pinMode(THREE_FLOOR, INPUT_PULLDOWN);
+``
 - Tập lệnh điều khiển từ Bluetooth
 
 
@@ -104,7 +135,6 @@ if(data == WHAT_STATUS){
       SerialBT.write(to_char(current_status));
     }
 ```
-
 - Lệnh t dùng để hỏi trạng thái của của các trigger  
 ```c++
  if (data == TRIGGER_STATUS) {
@@ -113,7 +143,6 @@ if(data == WHAT_STATUS){
       SerialBT.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
     }
 ```
-
 
 
 ## Quá trình vận hành
