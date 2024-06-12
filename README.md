@@ -32,6 +32,9 @@
 ## Sơ đồ mạch điều khiển ESP32
 
 ![ Sơ đồ mạch điều khiển ESP32 DOIT Devkit v1 ](https://mischianti.org/wp-content/uploads/2020/11/ESP32-DOIT-DEV-KIT-v1-pinout-mischianti.png)
+## Sơ đồ mạch demo
+![ Sơ đồ mạch demo ](./wiring-diagram.png) 
+- Các nút được set up INPUT_PULLDOWN nên cần nối 1 đầu với VCC
 - Cài đặt cơ bản tốc độ cổng serial ( monitor)
 
 ```c++
