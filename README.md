@@ -1,6 +1,6 @@
 ﻿# Thiết kế Mạch Điều Khiển thăng máy tự chế cho nhà ông Bùi Đình Vân
 
- ## Sơ đồ Thiết kế
+## Sơ đồ Thiết kế
 
            ___
           | E |
@@ -20,7 +20,7 @@
      ______|||
     |      |||
     |______|||
- 
+
 - Thang máy gồm 1 động cơ trên nóc tầng 3
 - Thang máy bình thường sẽ nằm ở tầng 2 để không bị vướng lối đi lại ở tầng 1 .
 - Thang máy được cân bằng bằng đối trọng nằng trong ray
@@ -32,15 +32,32 @@
 ## Sơ đồ mạch điều khiển ESP32
 
 ![ Sơ đồ mạch điều khiển ESP32 DOIT Devkit v1 ](https://mischianti.org/wp-content/uploads/2020/11/ESP32-DOIT-DEV-KIT-v1-pinout-mischianti.png)
+
 ## Sơ đồ mạch demo
-![ Sơ đồ mạch demo ](./wiring-diagram.png) 
+
+![ Sơ đồ mạch demo ](./wiring-diagram.png)
+
 - Các nút được set up INPUT_PULLDOWN nên cần nối 1 đầu với VCC
+- Gồm 7 nút 3 nút gọi thang, 3 nút trigger khi thang tới từng tầng và 1 nút trigger cửa thang
+    - Nút gọi thang 1,2,3 lần lượt là 18,19,21
+    - Nút trigger thang 1,2,3 lần lượt là 25,26,27. Đây là các lẫy được đặt ở tầng 1,2,3 để báo cho thang máy biết
+      thang đã đến tầng nào.
+    - Nút trigger cửa thang là 33 khi nút này được bấm (giữ) (`digitalRead(DOOR_CLOSE_TRIGGER) == HIGH`) thì là cừa đang
+      đóng => thang máy được phép di chuyển. Nếu nút này được thả ra (`digitalRead(DOOR_CLOSE_TRIGGER) == LOW`) thì cửa
+      thang mở thanh máy ko được phép di chuyển
+    - Buzzer / loa báo hiệu thang đã đến tầng nào: Pin 32. Đây là active buzzer module nên để nó phát ra tiếng cần set
+      `digitalWrite(BUZZER_PIN, HIGH)` và để nó ngưng phát tiếng cần set `digitalWrite(BUZZER_PIN, LOW)`. Xem hàm `playTone()`
+    - 1 motor để demo cho động cơ thang máy
+
+
 - Cài đặt cơ bản tốc độ cổng serial ( monitor)
 
 ```c++
 Serial.begin(115200);
 ```
+
 monitor_speed = 115200
+
 - Cài đặt điều khiển bằng Bluetooth tên thiết bị là ONGNOI
 
 ```c++
@@ -82,8 +99,9 @@ BLEDevice::init("ONGNOI"); // Set the name of the device
   pinMode(ENGINE_DOWN_PIN, OUTPUT);
 
 ```
+
 - Chân điều nhận tín hiệu từ cảm biến khi đến các tầng 1,2,3 lần lượt là 25,26,27 ( được setup INPUT_PULLDOWN)
-  
+
 ```C++
 #define TRIGGER_FIRST_FLOOR_DOWN 25
 #define TRIGGER_SECOND_FLOOR_DOWN 26
@@ -93,7 +111,10 @@ BLEDevice::init("ONGNOI"); // Set the name of the device
   pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT_PULLDOWN );
   pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT_PULLDOWN );
 ```
-- Chân nhận tín hiệu điều khiển các nút ở bên trong thang máy khi đến các tầng 1, 2 ,3 lần lượt là 18,19,21(được setup INPUT_PULLDOWN)
+
+- Chân nhận tín hiệu điều khiển các nút ở bên trong thang máy khi đến các tầng 1, 2 ,3 lần lượt là 18,19,21(được setup
+  INPUT_PULLDOWN)
+
 ````C++
   #define ONEST_FLOOR 18
   #define TWOND_FLOOR 19
