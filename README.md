@@ -49,6 +49,13 @@
       `digitalWrite(BUZZER_PIN, HIGH)` và để nó ngưng phát tiếng cần set `digitalWrite(BUZZER_PIN, LOW)`. Xem hàm `playTone()`
     - 1 motor để demo cho động cơ thang máy
 
+- Nút trigger thang sẽ sử dụng limit switch
+![limit-switch-pinout.jpg](./images/limit-switch-pinout.jpg)
+- Wring sẽ như này để code không thay đổi (code đang dùng push button)
+
+| C pin | No Pin                           | NC pin        | ESP32 Input state                      |  
+|-------|----------------------------------|---------------|----------------------------------------|
+| VCC   | ESP32 Input Pin (with pull-down) | not connected | LOW when untouched,  HIGH when touched |  
 
 - Cài đặt cơ bản tốc độ cổng serial ( monitor)
 
