@@ -37,7 +37,8 @@
 
 ![ Sơ đồ mạch demo ](./wiring-diagram.png)
 
-- Các nút được set up INPUT_PULLDOWN nên cần nối 1 đầu với VCC
+- Các nút được set up INPUT_PULLUP nên cần nối 1 đầu với GND
+- Cac nut dc dieu khien qua thu vien ezButton
 - Gồm 7 nút 3 nút gọi thang, 3 nút trigger khi thang tới từng tầng và 1 nút trigger cửa thang
     - Nút gọi thang 1,2,3 lần lượt là 18,19,21
     - Nút trigger thang 1,2,3 lần lượt là 25,26,27. Đây là các lẫy được đặt ở tầng 1,2,3 để báo cho thang máy biết

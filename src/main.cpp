@@ -8,6 +8,7 @@
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
+#include <ezButton.h>
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
@@ -57,11 +58,19 @@ BLECharacteristic *pCharacteristic;
 #define BUZZER_DURATION 100
 
 #define MAX_IDLE_TIME 10000000 // 5 minutes I guess so
-
+#define DEBOUNCE_TIME 50 // the debounce time in millisecond, increase this time if it still chatters
 byte current_pos = SECOND_FLOOR;
 byte current_status = STOP;
 byte target_floor = 0;
 byte is_door_close = 0;
+
+ezButton firstFloorButton(ONEST_FLOOR);
+ezButton secondFloorButton(TWOND_FLOOR);
+ezButton thirdFloorButton(THREE_FLOOR);
+ezButton triggerFirstFloor(TRIGGER_FIRST_FLOOR_DOWN);
+ezButton triggerSecondFloor(TRIGGER_SECOND_FLOOR_DOWN);
+ezButton triggerThirdFloor(TRIGGER_THIRD_FLOOR_DOWN);
+ezButton doorCloseTrigger(DOOR_CLOSE_TRIGGER);  
 
 void setup()
 {
@@ -70,22 +79,19 @@ void setup()
   SerialBT.begin("ONGNOII1"); // Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
 
+  firstFloorButton.setDebounceTime(DEBOUNCE_TIME);  
+  secondFloorButton.setDebounceTime(DEBOUNCE_TIME);
+  thirdFloorButton.setDebounceTime(DEBOUNCE_TIME);
+  triggerFirstFloor.setDebounceTime(DEBOUNCE_TIME);
+  triggerSecondFloor.setDebounceTime(DEBOUNCE_TIME);
+  triggerThirdFloor.setDebounceTime(DEBOUNCE_TIME);
+  doorCloseTrigger.setDebounceTime(DEBOUNCE_TIME);
+
   // setup pins mode for engine
   pinMode(ENGINE_UP_PIN, OUTPUT);
   pinMode(ENGINE_DOWN_PIN, OUTPUT);
 
-  // setup pins mode for trigger
-  pinMode(TRIGGER_FIRST_FLOOR_DOWN, INPUT_PULLDOWN);
-  pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT_PULLDOWN);
-  pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT_PULLDOWN);
 
-  // setup pins mode for button in elevator
-  pinMode(ONEST_FLOOR, INPUT_PULLDOWN);
-  pinMode(TWOND_FLOOR, INPUT_PULLDOWN);
-  pinMode(THREE_FLOOR, INPUT_PULLDOWN);
-
-  //pin mode for door close trigger
-  pinMode(DOOR_CLOSE_TRIGGER, INPUT_PULLDOWN);
   //pin mode for buzzer
   pinMode(ELEVATOR_BUZZER, OUTPUT);
   //turn off buzzer
@@ -223,13 +229,21 @@ int playTone()
 
 void loop()
 {
+  firstFloorButton.loop();
+  secondFloorButton.loop();
+  thirdFloorButton.loop();
+  triggerFirstFloor.loop();
+  triggerSecondFloor.loop();
+  triggerThirdFloor.loop();
+  doorCloseTrigger.loop();
+  
   ideTime++;
   if (ideTime > MAX_IDLE_TIME)
   {
     ideTime = 0;
     gotoSleep();
   }
-  if (digitalRead(TRIGGER_FIRST_FLOOR_DOWN) == HIGH)
+  if (triggerFirstFloor.isPressed())
   {
     Serial.write("TRIGGER_FIRST_FLOOR_DOWN");
     current_pos = FIRST_FLOOR;
@@ -242,7 +256,7 @@ void loop()
     return;
   }
 
-  if (digitalRead(TRIGGER_SECOND_FLOOR_DOWN) == HIGH)
+  if (triggerSecondFloor.isPressed())
   {
     Serial.write("TRIGGER_SECOND_FLOOR_DOWN");
     current_pos = SECOND_FLOOR;
@@ -255,7 +269,7 @@ void loop()
     return;
   }
 
-  if (digitalRead(TRIGGER_THIRD_FLOOR_DOWN) == HIGH)
+  if (triggerThirdFloor.isPressed())
   {
     Serial.write("TRIGGER_THIRD_FLOOR_DOWN");
     current_pos = THIRD_FLOOR;
@@ -268,7 +282,7 @@ void loop()
     return;
   }
   // door status
-  if (digitalRead(DOOR_CLOSE_TRIGGER) == HIGH)
+  if (doorCloseTrigger.isPressed())
   {
     is_door_close = 1;
   }
@@ -388,14 +402,14 @@ void loop()
     }
   }
 
-  if (digitalRead(ONEST_FLOOR) == HIGH)
+  if (firstFloorButton.isPressed())
   {
     moveToFloor(FIRST_FLOOR);
     Serial.print("ONEST_FLOOR");
     Serial.println();
     return;
   }
-  if (digitalRead(TWOND_FLOOR) == HIGH)
+  if (secondFloorButton.isPressed())
   {
     moveToFloor(SECOND_FLOOR);
     Serial.print("TWOND_FLOOR");
@@ -403,7 +417,7 @@ void loop()
     return;
   }
 
-  if (digitalRead(THREE_FLOOR) == HIGH)
+  if (thirdFloorButton.isPressed())
   {
     moveToFloor(THIRD_FLOOR);
     Serial.print("THREE_FLOOR");
