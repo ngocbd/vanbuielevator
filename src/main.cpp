@@ -53,16 +53,18 @@ BLECharacteristic *pCharacteristic;
 
 #define DOOR_CLOSE_TRIGGER 33
 
+#define BOTTOM_STOP_TRIGGER 32
+
 #define ELEVATOR_BUZZER 32
 #define BUZZER_FREQUENCY 2000
 #define BUZZER_DURATION 100
 
-#define MAX_IDLE_TIME 10000000 // 5 minutes I guess so
 #define DEBOUNCE_TIME 50 // the debounce time in millisecond, increase this time if it still chatters
-byte current_pos = SECOND_FLOOR;
+byte current_pos = FIRST_FLOOR;
 byte current_status = STOP;
 byte target_floor = 0;
 byte is_door_close = 0;
+byte is_pausing = 0; // elevator is pausing
 
 ezButton firstFloorButton(ONEST_FLOOR);
 ezButton secondFloorButton(TWOND_FLOOR);
@@ -70,7 +72,8 @@ ezButton thirdFloorButton(THREE_FLOOR);
 ezButton triggerFirstFloor(TRIGGER_FIRST_FLOOR_DOWN);
 ezButton triggerSecondFloor(TRIGGER_SECOND_FLOOR_DOWN);
 ezButton triggerThirdFloor(TRIGGER_THIRD_FLOOR_DOWN);
-ezButton doorCloseTrigger(DOOR_CLOSE_TRIGGER);  
+ezButton doorCloseTrigger(DOOR_CLOSE_TRIGGER);
+ezButton bottomStopTrigger(BOTTOM_STOP_TRIGGER);
 
 void setup()
 {
@@ -79,25 +82,23 @@ void setup()
   SerialBT.begin("ONGNOII1"); // Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
 
-  firstFloorButton.setDebounceTime(DEBOUNCE_TIME);  
+  firstFloorButton.setDebounceTime(DEBOUNCE_TIME);
   secondFloorButton.setDebounceTime(DEBOUNCE_TIME);
   thirdFloorButton.setDebounceTime(DEBOUNCE_TIME);
   triggerFirstFloor.setDebounceTime(DEBOUNCE_TIME);
   triggerSecondFloor.setDebounceTime(DEBOUNCE_TIME);
   triggerThirdFloor.setDebounceTime(DEBOUNCE_TIME);
   doorCloseTrigger.setDebounceTime(DEBOUNCE_TIME);
+  bottomStopTrigger.setDebounceTime(DEBOUNCE_TIME);
 
   // setup pins mode for engine
   pinMode(ENGINE_UP_PIN, OUTPUT);
   pinMode(ENGINE_DOWN_PIN, OUTPUT);
 
-
-  //pin mode for buzzer
+  // pin mode for buzzer
   pinMode(ELEVATOR_BUZZER, OUTPUT);
-  //turn off buzzer
+  // turn off buzzer
   digitalWrite(ELEVATOR_BUZZER, HIGH);
-
-  
 
   // Initialize BLE
   BLEDevice::init("ONGNOI"); // Set the name of the device
@@ -140,7 +141,7 @@ int forceStop()
   current_status = STOP;
   return 1;
 }
-int ideTime = 0;
+
 int moveToFloor(int floor)
 {
   // Only move if the elevator is not at the target floor
@@ -160,18 +161,12 @@ int moveToFloor(int floor)
     return 0;
   }
 
-  ideTime = 0;
   target_floor = floor;
   if (current_pos < target_floor)
   {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     digitalWrite(ENGINE_UP_PIN, HIGH);
     current_status = UP;
-    delay(1000);
-    if (current_status == UP)
-    {
-      current_pos = floor;
-    }
     return 1;
   }
   else if (current_pos > target_floor)
@@ -179,22 +174,7 @@ int moveToFloor(int floor)
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, HIGH);
     current_status = DOWN;
-    delay(1000);
-    if (current_status == DOWN)
-    {
-      current_pos = floor;
-    }
     return 2;
-  }
-  return 0;
-}
-
-int gotoSleep()
-{
-  // move to second floor to sleep
-  if (current_pos != SECOND_FLOOR)
-  {
-    return moveToFloor(SECOND_FLOOR);
   }
   return 0;
 }
@@ -236,18 +216,38 @@ void loop()
   triggerSecondFloor.loop();
   triggerThirdFloor.loop();
   doorCloseTrigger.loop();
-  
-  ideTime++;
-  if (ideTime > MAX_IDLE_TIME)
+  bottomStopTrigger.loop();
+  // when the trigger at the bottom of the elevator is pressed (meaning some  obstacle is in the way) stop the elevator
+  if (bottomStopTrigger.getState() == LOW || doorCloseTrigger.getState() == HIGH)
   {
-    ideTime = 0;
-    gotoSleep();
+    digitalWrite(ENGINE_UP_PIN, LOW);
+    digitalWrite(ENGINE_DOWN_PIN, LOW);
+    is_pausing = 1;
   }
+  // continue the elevator when the obstacle is removed and the door is closed
+  if (is_pausing == 1 && bottomStopTrigger.getState() == HIGH && doorCloseTrigger.getState() == LOW)
+  {
+    if (current_status == UP)
+    {
+      
+      delay(1000);
+      digitalWrite(ENGINE_UP_PIN, HIGH);
+      digitalWrite(ENGINE_DOWN_PIN, LOW);
+    }
+    if (current_status == DOWN)
+    {
+      delay(1000);
+      digitalWrite(ENGINE_DOWN_PIN, HIGH);
+      digitalWrite(ENGINE_UP_PIN, LOW);
+    }
+    is_pausing = 0;
+  }
+
   if (triggerFirstFloor.isPressed())
   {
     Serial.write("TRIGGER_FIRST_FLOOR_DOWN");
     current_pos = FIRST_FLOOR;
-    ideTime = 0;
+
     if ((target_floor == FIRST_FLOOR) && (current_status == DOWN))
     {
       forceStop();
@@ -260,7 +260,7 @@ void loop()
   {
     Serial.write("TRIGGER_SECOND_FLOOR_DOWN");
     current_pos = SECOND_FLOOR;
-    ideTime = 0;
+
     if (target_floor == SECOND_FLOOR)
     {
       forceStop();
@@ -273,7 +273,6 @@ void loop()
   {
     Serial.write("TRIGGER_THIRD_FLOOR_DOWN");
     current_pos = THIRD_FLOOR;
-    ideTime = 0;
     if ((target_floor == THIRD_FLOOR) && (current_status == UP))
     {
       forceStop();
@@ -281,8 +280,8 @@ void loop()
     playTone();
     return;
   }
-  // door status
-  if (doorCloseTrigger.isPressed())
+  // door status //low because of pull up resistor
+  if (doorCloseTrigger.getState() == LOW)
   {
     is_door_close = 1;
   }
@@ -306,13 +305,13 @@ void loop()
       Serial.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
       Serial.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
     }
-    else if (data == IDLE_TIME)
-    {
-      Serial.write("IDLE_TIME CMD ");
-      uint8_t ideTimeByte = static_cast<uint8_t>(ideTime);
-      pCharacteristic->setValue(&ideTimeByte, sizeof(ideTimeByte));
-      Serial.println();
-    }
+    // else if (data == IDLE_TIME)
+    // {
+    //   Serial.write("IDLE_TIME CMD ");
+    //   uint8_t ideTimeByte = static_cast<uint8_t>(ideTime);
+    //   pCharacteristic->setValue(&ideTimeByte, sizeof(ideTimeByte));
+    //   Serial.println();
+    // }
     else if (data == FORCE_STOP)
     {
       Serial.write("FORCE_STOP CMD ");
@@ -357,15 +356,15 @@ void loop()
     byte data = SerialBT.read();
     if (data == TRIGGER_STATUS)
     {
-      SerialBT.write(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN)));
-      SerialBT.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
-      SerialBT.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
+      SerialBT.write(digitalToString(triggerFirstFloor.getState()));
+      SerialBT.write(digitalToString(triggerSecondFloor.getState()));
+      SerialBT.write(digitalToString(triggerThirdFloor.getState()));
     }
-    else if (data == IDLE_TIME)
-    {
-      Serial.write("IDLE_TIME CMD ");
-      SerialBT.println(String(ideTime));
-    }
+    // else if (data == IDLE_TIME)
+    // {
+    //   Serial.write("IDLE_TIME CMD ");
+    //   SerialBT.println(String(ideTime));
+    // }
     else if (data == WHERE_ARE_YOU)
     {
       Serial.write("WHERE_ARE_YOU CMD ");
