@@ -39,13 +39,16 @@
 
 - Các nút được set up INPUT_PULLUP nên cần nối 1 đầu với GND
 - Cac nut dc dieu khien qua thu vien ezButton
-- Gồm 7 nút 3 nút gọi thang, 3 nút trigger khi thang tới từng tầng và 1 nút trigger cửa thang
+- Gồm 8 nút 3 nút gọi thang, 3 nút trigger khi thang tới từng tầng, 1 nút trigger cửa thang, 1 nút cho công tắc an toàn ở dưới đáy thang
+
     - Nút gọi thang 1,2,3 lần lượt là 18,19,21
     - Nút trigger thang 1,2,3 lần lượt là 25,26,27. Đây là các lẫy được đặt ở tầng 1,2,3 để báo cho thang máy biết
       thang đã đến tầng nào.
-    - Nút trigger cửa thang là 33 khi nút này được bấm (giữ) (`digitalRead(DOOR_CLOSE_TRIGGER) == HIGH`) thì là cừa đang
-      đóng => thang máy được phép di chuyển. Nếu nút này được thả ra (`digitalRead(DOOR_CLOSE_TRIGGER) == LOW`) thì cửa
+    - Nút trigger cửa thang là 33 khi nút này được bấm (giữ) (`digitalRead(DOOR_CLOSE_TRIGGER) == LOW`) thì là cừa đang
+      đóng => thang máy được phép di chuyển. Nếu nút này được thả ra (`digitalRead(DOOR_CLOSE_TRIGGER) == HIGH`) thì cửa
       thang mở thanh máy ko được phép di chuyển
+    - Nút công tắc an toàn ở dưới đáy thang là 32. Khi nút này được bấm thì thang máy sẽ dừng lại ngay lập tức và không
+      được phép di chuyển cho đến khi nút này được thả ra
     - Buzzer / loa báo hiệu thang đã đến tầng nào: Pin 32. Đây là active buzzer module nên để nó phát ra tiếng cần set
       `digitalWrite(BUZZER_PIN, HIGH)` và để nó ngưng phát tiếng cần set `digitalWrite(BUZZER_PIN, LOW)`. Xem hàm `playTone()`
     - 1 motor để demo cho động cơ thang máy
@@ -56,8 +59,21 @@
 
 | C pin | No Pin                           | NC pin        | ESP32 Input state                      |  
 |-------|----------------------------------|---------------|----------------------------------------|
-| VCC   | ESP32 Input Pin (with pull-down) | not connected | LOW when untouched,  HIGH when touched |  
+| GND   | ESP32 Input Pin (with pull-up)   | not connected | LOW when touched,  HIGH when untouched |  
+- PIN của các nút/côngg tắc
+```C++
+#define ONEST_FLOOR 18  // Nút gọi thang tang 1
+#define TWOND_FLOOR 19  // Nút gọi thang tang 2
+#define THREE_FLOOR 21  // Nút gọi thang tang 3
 
+#define TRIGGER_FIRST_FLOOR_DOWN 25 // Công tắc trigger thang tang 1
+#define TRIGGER_SECOND_FLOOR_DOWN 26 // Công tắc trigger thang tang 2
+#define TRIGGER_THIRD_FLOOR_DOWN 27 // Công tắc trigger thang tang 3
+
+#define DOOR_CLOSE_TRIGGER 33  // Công tắc trigger cửa thang
+
+#define BOTTOM_STOP_TRIGGER 32 // Công tắc an toàn ở dưới đáy thang
+```
 - Cài đặt cơ bản tốc độ cổng serial ( monitor)
 
 ```c++
