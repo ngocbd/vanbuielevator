@@ -218,14 +218,14 @@ void loop()
   doorCloseTrigger.loop();
   bottomStopTrigger.loop();
   // when the trigger at the bottom of the elevator is pressed (meaning some  obstacle is in the way) stop the elevator
-  if (bottomStopTrigger.getState() == LOW || doorCloseTrigger.getState() == HIGH)
+  if (bottomStopTrigger.getState() == HIGH || doorCloseTrigger.getState() == HIGH)
   {
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     is_pausing = 1;
   }
   // continue the elevator when the obstacle is removed and the door is closed
-  if (is_pausing == 1 && bottomStopTrigger.getState() == HIGH && doorCloseTrigger.getState() == LOW)
+  if (is_pausing == 1 && bottomStopTrigger.getState() == LOW && doorCloseTrigger.getState() == LOW)
   {
     if (current_status == UP)
     {
