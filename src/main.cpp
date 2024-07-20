@@ -220,6 +220,7 @@ void loop()
   // when the trigger at the bottom of the elevator is pressed (meaning some  obstacle is in the way) stop the elevator
   if (bottomStopTrigger.getState() == HIGH || doorCloseTrigger.getState() == HIGH)
   {
+    Serial.println("pausing");
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     is_pausing = 1;
