@@ -10,6 +10,64 @@
 #include <BLEServer.h>
 #include <ezButton.h>
 
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <MqttLogger.h>
+// #include "wifi_secrets.h"
+
+const char *ssid = "Van Phien";
+const char *password = "25122013";
+const char *mqtt_server = "103.199.18.51";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// default mode is MqttLoggerMode::MqttAndSerialFallback
+MqttLogger mqttLogger(client, "ongnoi/thangmay");
+// other available modes:
+// MqttLogger mqttLogger(client,"mqttlogger/log",MqttLoggerMode::MqttAndSerial);
+// MqttLogger mqttLogger(client,"mqttlogger/log",MqttLoggerMode::MqttOnly);
+// MqttLogger mqttLogger(client,"mqttlogger/log",MqttLoggerMode::SerialOnly);
+
+// connect to wifi network
+void wifiConnect()
+{
+  mqttLogger.print("Connecting to WiFi: ");
+  mqttLogger.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    mqttLogger.print(".");
+  }
+  mqttLogger.print("WiFi connected: ");
+  mqttLogger.println(WiFi.localIP());
+}
+
+// establish mqtt client connection
+void reconnect()
+{
+  // Loop until we're reconnected
+  while (!client.connected())
+  {
+    mqttLogger.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("ESP32Logger"))
+    {
+      // as we have a connection here, this will be the first message published to the mqtt server
+      mqttLogger.println("connected.");
+    }
+    else
+    {
+      mqttLogger.print("failed, rc=");
+      mqttLogger.print(client.state());
+      mqttLogger.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
 #endif
@@ -75,6 +133,13 @@ ezButton triggerThirdFloor(TRIGGER_THIRD_FLOOR_DOWN);
 ezButton doorCloseTrigger(DOOR_CLOSE_TRIGGER);
 ezButton bottomStopTrigger(BOTTOM_STOP_TRIGGER);
 
+void elevatorLog(String message)
+{
+  Serial.println(message);
+  mqttLogger.println(message);
+  SerialBT.println(message);
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -123,6 +188,14 @@ void setup()
 
   // Start promoting the name
   pServer->getAdvertising()->start();
+
+  mqttLogger.println("Starting setup..");
+
+  // connect to wifi
+  wifiConnect();
+
+  // mqtt client
+  client.setServer(mqtt_server, 1883);
 }
 
 char to_char(byte data)
@@ -193,7 +266,7 @@ char digitalToString(byte data)
 
 int playTone()
 {
-  Serial.println("playTone");
+  elevatorLog("playTone");
   int halfPeriod = 1000000L / (BUZZER_FREQUENCY * 2);                 // Calculate half period in microseconds
   unsigned long cycles = (BUZZER_FREQUENCY * BUZZER_DURATION) / 1000; // Calculate the number of cycles for the given duration
 
@@ -217,9 +290,16 @@ void loop()
   triggerThirdFloor.loop();
   doorCloseTrigger.loop();
   bottomStopTrigger.loop();
+  // here the mqtt connection is established
+  if (!client.connected())
+  {
+    reconnect();
+  }
+
   // when the trigger at the bottom of the elevator is pressed (meaning some  obstacle is in the way) stop the elevator
   if (bottomStopTrigger.getState() == HIGH || doorCloseTrigger.getState() == HIGH)
   {
+    // elevatorLog("pausing");
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     is_pausing = 1;
@@ -245,7 +325,7 @@ void loop()
 
   if (triggerFirstFloor.isPressed())
   {
-    Serial.write("TRIGGER_FIRST_FLOOR_DOWN");
+    elevatorLog("TRIGGER_FIRST_FLOOR_DOWN");
     current_pos = FIRST_FLOOR;
 
     if ((target_floor == FIRST_FLOOR) && (current_status == DOWN))
@@ -258,7 +338,7 @@ void loop()
 
   if (triggerSecondFloor.isPressed())
   {
-    Serial.write("TRIGGER_SECOND_FLOOR_DOWN");
+    elevatorLog("TRIGGER_SECOND_FLOOR_DOWN");
     current_pos = SECOND_FLOOR;
 
     if (target_floor == SECOND_FLOOR)
@@ -271,7 +351,7 @@ void loop()
 
   if (triggerThirdFloor.isPressed())
   {
-    Serial.write("TRIGGER_THIRD_FLOOR_DOWN");
+    elevatorLog("TRIGGER_THIRD_FLOOR_DOWN");
     current_pos = THIRD_FLOOR;
     if ((target_floor == THIRD_FLOOR) && (current_status == UP))
     {
@@ -314,34 +394,34 @@ void loop()
     // }
     else if (data == FORCE_STOP)
     {
-      Serial.write("FORCE_STOP CMD ");
+      elevatorLog("FORCE_STOP CMD ");
       forceStop();
     }
     else if (data == FIRST_FLOOR_PRESS)
     {
-      Serial.write("FIRST_FLOOR_PRESS CMD ");
+      elevatorLog("FIRST_FLOOR_PRESS CMD ");
       moveToFloor(FIRST_FLOOR);
     }
     else if (data == SECOND_FLOOR_PRESS)
     {
-      Serial.write("SECOND_FLOOR_PRESS CMD ");
+      elevatorLog("SECOND_FLOOR_PRESS CMD ");
       moveToFloor(SECOND_FLOOR);
     }
     else if (data == THIRD_FLOOR_PRESS)
     {
-      Serial.write("THIRD_FLOOR_PRESS CMD ");
+      elevatorLog("THIRD_FLOOR_PRESS CMD ");
       moveToFloor(THIRD_FLOOR);
     }
     else if (data == WHERE_ARE_YOU)
     {
-      Serial.write("WHERE_ARE_YOU CMD ");
+      elevatorLog("WHERE_ARE_YOU CMD ");
       Serial.write(data);
       pCharacteristic->setValue(&current_pos, sizeof(current_pos));
       Serial.println();
     }
     else if (data == WHAT_STATUS)
     {
-      Serial.write("WHAT_STATUS CMD ");
+      elevatorLog("WHAT_STATUS CMD ");
       Serial.write(data);
       pCharacteristic->setValue(&current_status, sizeof(current_status));
       Serial.println();
@@ -367,12 +447,12 @@ void loop()
     // }
     else if (data == WHERE_ARE_YOU)
     {
-      Serial.write("WHERE_ARE_YOU CMD ");
+      elevatorLog("WHERE_ARE_YOU CMD ");
       SerialBT.write(to_char(current_pos));
     }
     else if (data == WHAT_STATUS)
     {
-      Serial.write("WHAT_STATUS CMD ");
+      elevatorLog("WHAT_STATUS CMD ");
       SerialBT.write(to_char(current_status));
     }
     else if (data == FORCE_STOP)
@@ -382,17 +462,17 @@ void loop()
     }
     else if (data == FIRST_FLOOR_PRESS)
     {
-      Serial.write("FIRST_FLOOR_PRESS CMD ");
+      elevatorLog("FIRST_FLOOR_PRESS CMD ");
       moveToFloor(FIRST_FLOOR);
     }
     else if (data == SECOND_FLOOR_PRESS)
     {
-      Serial.write("SECOND_FLOOR_PRESS CMD ");
+      elevatorLog("SECOND_FLOOR_PRESS CMD ");
       moveToFloor(SECOND_FLOOR);
     }
     else if (data == THIRD_FLOOR_PRESS)
     {
-      Serial.write("THIRD_FLOOR_PRESS CMD ");
+      elevatorLog("THIRD_FLOOR_PRESS CMD ");
       moveToFloor(THIRD_FLOOR);
     }
     else
@@ -404,14 +484,14 @@ void loop()
   if (firstFloorButton.isPressed())
   {
     moveToFloor(FIRST_FLOOR);
-    Serial.print("ONEST_FLOOR");
+    elevatorLog("ONEST_FLOOR");
     Serial.println();
     return;
   }
   if (secondFloorButton.isPressed())
   {
     moveToFloor(SECOND_FLOOR);
-    Serial.print("TWOND_FLOOR");
+    elevatorLog("TWOND_FLOOR");
     Serial.println();
     return;
   }
@@ -419,7 +499,7 @@ void loop()
   if (thirdFloorButton.isPressed())
   {
     moveToFloor(THIRD_FLOOR);
-    Serial.print("THREE_FLOOR");
+    elevatorLog("THREE_FLOOR");
     Serial.println();
     return;
   }
