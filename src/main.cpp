@@ -1,24 +1,14 @@
-// This example code is in the Public Domain (or CC0 licensed, at your option.)
-// By Evandro Copercini - 2018
-//
-// This example creates a bridge between Serial and Classical Bluetooth (SPP)
-// and also demonstrate that SerialBT have the same functionalities of a normal Serial
-
 #include "BluetoothSerial.h"
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
 #include <ezButton.h>
-
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <MqttLogger.h>
-// #include "wifi_secrets.h"
+#include <string.h>
 
 const char *ssid = "Van Phien";
 const char *password = "25122013";
 const char *mqtt_server = "103.199.18.51";
-
+static unsigned long lastPingTime = 0;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
@@ -73,11 +63,6 @@ void reconnect()
 #endif
 
 BluetoothSerial SerialBT;
-BLEDevice BLE;
-
-BLEServer *pServer;
-BLEService *pService;
-BLECharacteristic *pCharacteristic;
 
 #define TOTAL_FLOORS 3
 #define FIRST_FLOOR 1
@@ -89,14 +74,14 @@ BLECharacteristic *pCharacteristic;
 #define STOP 0
 
 #define WHERE_ARE_YOU 'w'
-#define IDLE_TIME 'i'   // IDLE TIME
 #define WHAT_STATUS 's' // ENEGINE UP, DOWN, STOP status
 #define FIRST_FLOOR_PRESS '1'
 #define SECOND_FLOOR_PRESS '2'
 #define THIRD_FLOOR_PRESS '3'
 #define TRIGGER_STATUS 't' // TRIGGER STATUS
-
 #define FORCE_STOP 'f'
+#define DOOR_STATUS 'd'
+#define BOTTOM_STOP_STATUS 'b'
 
 #define ENGINE_UP_PIN 23
 #define ENGINE_DOWN_PIN 22
@@ -105,6 +90,10 @@ BLECharacteristic *pCharacteristic;
 #define TWOND_FLOOR 19
 #define THREE_FLOOR 21
 
+#define ONEST_FLOOR_LED_PIN 13
+#define TWOND_FLOOR_LED_PIN 12
+#define THREE_FLOOR_LED_PIN 14
+
 #define TRIGGER_FIRST_FLOOR_DOWN 25
 #define TRIGGER_SECOND_FLOOR_DOWN 26
 #define TRIGGER_THIRD_FLOOR_DOWN 27
@@ -112,10 +101,6 @@ BLECharacteristic *pCharacteristic;
 #define DOOR_CLOSE_TRIGGER 33
 
 #define BOTTOM_STOP_TRIGGER 32
-
-#define ELEVATOR_BUZZER 32
-#define BUZZER_FREQUENCY 2000
-#define BUZZER_DURATION 100
 
 #define DEBOUNCE_TIME 50 // the debounce time in millisecond, increase this time if it still chatters
 byte current_pos = FIRST_FLOOR;
@@ -144,7 +129,7 @@ void setup()
 {
   Serial.begin(115200);
   // setup bluetooth
-  SerialBT.begin("ONGNOII1"); // Bluetooth device name
+  SerialBT.begin("ONGNOI");
   Serial.println("The device started, now you can pair it with bluetooth!");
 
   firstFloorButton.setDebounceTime(DEBOUNCE_TIME);
@@ -156,38 +141,13 @@ void setup()
   doorCloseTrigger.setDebounceTime(DEBOUNCE_TIME);
   bottomStopTrigger.setDebounceTime(DEBOUNCE_TIME);
 
+  pinMode(ONEST_FLOOR_LED_PIN, OUTPUT);
+  pinMode(TWOND_FLOOR_LED_PIN, OUTPUT);
+  pinMode(THREE_FLOOR_LED_PIN, OUTPUT);
+
   // setup pins mode for engine
   pinMode(ENGINE_UP_PIN, OUTPUT);
   pinMode(ENGINE_DOWN_PIN, OUTPUT);
-
-  // pin mode for buzzer
-  pinMode(ELEVATOR_BUZZER, OUTPUT);
-  // turn off buzzer
-  digitalWrite(ELEVATOR_BUZZER, HIGH);
-
-  // Initialize BLE
-  BLEDevice::init("ONGNOI"); // Set the name of the device
-
-  // Create a BLE Server
-  pServer = BLEDevice::createServer();
-
-  // Create a BLE Service
-  pService = pServer->createService(BLEUUID("00001234-0000-1000-8000-00805f9b34fb")); // Service Generic Access
-
-  // Create a BLE Characteristic and add it to Service
-  pCharacteristic = pService->createCharacteristic(
-      BLEUUID("00001001-0000-1000-8000-00805f9b34fb"), // Characteristic Device Name
-      BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE);
-
-  // Add Characteristics to Service
-  pService->addCharacteristic(pCharacteristic);
-
-  // Register Service with Server
-  pService->start();
-
-  // Start promoting the name
-  pServer->getAdvertising()->start();
 
   mqttLogger.println("Starting setup..");
 
@@ -235,6 +195,22 @@ int moveToFloor(int floor)
   }
 
   target_floor = floor;
+  // turn on led
+  switch (target_floor)
+  {
+  case 1:
+    digitalWrite(ONEST_FLOOR_LED_PIN, HIGH);
+    break;
+  case 2:
+    digitalWrite(TWOND_FLOOR_LED_PIN, HIGH);
+    break;
+  case 3:
+    digitalWrite(THREE_FLOOR_LED_PIN, HIGH);
+    break;
+
+  default:
+    break;
+  }
   if (current_pos < target_floor)
   {
     digitalWrite(ENGINE_DOWN_PIN, LOW);
@@ -264,42 +240,13 @@ char digitalToString(byte data)
   }
 }
 
-int playTone()
+void elevatorSecurityCheck()
 {
-  elevatorLog("playTone");
-  int halfPeriod = 1000000L / (BUZZER_FREQUENCY * 2);                 // Calculate half period in microseconds
-  unsigned long cycles = (BUZZER_FREQUENCY * BUZZER_DURATION) / 1000; // Calculate the number of cycles for the given duration
-
-  for (unsigned long i = 0; i < cycles; i++)
-  {
-    digitalWrite(ELEVATOR_BUZZER, LOW);
-    delayMicroseconds(halfPeriod);
-    digitalWrite(ELEVATOR_BUZZER, HIGH);
-    delayMicroseconds(halfPeriod);
-  }
-  return 1;
-}
-
-void loop()
-{
-  firstFloorButton.loop();
-  secondFloorButton.loop();
-  thirdFloorButton.loop();
-  triggerFirstFloor.loop();
-  triggerSecondFloor.loop();
-  triggerThirdFloor.loop();
-  doorCloseTrigger.loop();
-  bottomStopTrigger.loop();
-  // here the mqtt connection is established
-  if (!client.connected())
-  {
-    reconnect();
-  }
-
   // when the trigger at the bottom of the elevator is pressed (meaning some  obstacle is in the way) stop the elevator
   if (bottomStopTrigger.getState() == HIGH || doorCloseTrigger.getState() == HIGH)
   {
     // elevatorLog("pausing");
+    // Serial.println("pausing");
     digitalWrite(ENGINE_UP_PIN, LOW);
     digitalWrite(ENGINE_DOWN_PIN, LOW);
     is_pausing = 1;
@@ -322,111 +269,92 @@ void loop()
     }
     is_pausing = 0;
   }
+}
+
+void onTriggerFloorDown(int floor)
+{
+  char logMessage[50]; // Allocate a buffer for the log message
+  snprintf(logMessage, sizeof(logMessage), "Trigger at floor %d is pressed", floor);
+  current_pos = floor;
+  elevatorLog(logMessage);
+
+  if ((target_floor == floor))
+  {
+    forceStop();
+    // turn off the led
+    switch (floor)
+    {
+    case 1:
+      digitalWrite(ONEST_FLOOR_LED_PIN, LOW);
+      break;
+    case 2:
+      digitalWrite(TWOND_FLOOR_LED_PIN, LOW);
+      break;
+    case 3:
+      digitalWrite(THREE_FLOOR_LED_PIN, LOW);
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  return;
+}
+
+void onElevatorButtonDown(int floor)
+{
+  moveToFloor(floor);
+  char logMessage[50]; // Allocate a buffer for the log message
+  snprintf(logMessage, sizeof(logMessage), "Button at floor %d is pressed", floor);
+  elevatorLog(logMessage);
+  return;
+}
+
+void sendBlackBox()
+{
+  // send the black box data to the mqtt server
+  char blackBoxMessage[110]; // Allocate a buffer for the log message
+  //build json string
+  snprintf(blackBoxMessage, sizeof(blackBoxMessage), "{\"current_pos\": %d, \"current_status\": %d, \"target_floor\": %d, \"is_door_close\": %d, \"is_pausing\": %d}", current_pos, current_status, target_floor, is_door_close, is_pausing);
+  mqttLogger.println(blackBoxMessage);
+  lastPingTime = millis();
+}
+
+void loop()
+{
+  firstFloorButton.loop();
+  secondFloorButton.loop();
+  thirdFloorButton.loop();
+  triggerFirstFloor.loop();
+  triggerSecondFloor.loop();
+  triggerThirdFloor.loop();
+  doorCloseTrigger.loop();
+  bottomStopTrigger.loop();
+  // here the mqtt connection is established
+  if (!client.connected())
+  {
+    reconnect();
+  }
+  elevatorSecurityCheck();
+  // physical buttons logic
+  //  door status -> low because of pull up resistor
+  is_door_close = doorCloseTrigger.getState() == LOW ? 1 : 0;
 
   if (triggerFirstFloor.isPressed())
-  {
-    elevatorLog("TRIGGER_FIRST_FLOOR_DOWN");
-    current_pos = FIRST_FLOOR;
-
-    if ((target_floor == FIRST_FLOOR) && (current_status == DOWN))
-    {
-      forceStop();
-    }
-    playTone();
-    return;
-  }
-
+    onTriggerFloorDown(FIRST_FLOOR);
   if (triggerSecondFloor.isPressed())
-  {
-    elevatorLog("TRIGGER_SECOND_FLOOR_DOWN");
-    current_pos = SECOND_FLOOR;
-
-    if (target_floor == SECOND_FLOOR)
-    {
-      forceStop();
-    }
-    playTone();
-    return;
-  }
-
+    onTriggerFloorDown(SECOND_FLOOR);
   if (triggerThirdFloor.isPressed())
-  {
-    elevatorLog("TRIGGER_THIRD_FLOOR_DOWN");
-    current_pos = THIRD_FLOOR;
-    if ((target_floor == THIRD_FLOOR) && (current_status == UP))
-    {
-      forceStop();
-    }
-    playTone();
-    return;
-  }
-  // door status //low because of pull up resistor
-  if (doorCloseTrigger.getState() == LOW)
-  {
-    is_door_close = 1;
-  }
-  else
-  {
-    is_door_close = 0;
-  }
+    onTriggerFloorDown(THIRD_FLOOR);
 
-  if (pCharacteristic->getValue().length() > 0)
-  {
-    std::string value = pCharacteristic->getValue();
-    char data = (char)value[0]; // Chuyển giá trị Uint8 thành ký tự ASCII
-    if (data == TRIGGER_STATUS)
-    {
-      uint8_t triggerValues[3] = {
-          static_cast<uint8_t>(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN))),
-          static_cast<uint8_t>(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN))),
-          static_cast<uint8_t>(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)))};
-      pCharacteristic->setValue(triggerValues, sizeof(triggerValues));
-      Serial.write(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN)));
-      Serial.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
-      Serial.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
-    }
-    // else if (data == IDLE_TIME)
-    // {
-    //   Serial.write("IDLE_TIME CMD ");
-    //   uint8_t ideTimeByte = static_cast<uint8_t>(ideTime);
-    //   pCharacteristic->setValue(&ideTimeByte, sizeof(ideTimeByte));
-    //   Serial.println();
-    // }
-    else if (data == FORCE_STOP)
-    {
-      elevatorLog("FORCE_STOP CMD ");
-      forceStop();
-    }
-    else if (data == FIRST_FLOOR_PRESS)
-    {
-      elevatorLog("FIRST_FLOOR_PRESS CMD ");
-      moveToFloor(FIRST_FLOOR);
-    }
-    else if (data == SECOND_FLOOR_PRESS)
-    {
-      elevatorLog("SECOND_FLOOR_PRESS CMD ");
-      moveToFloor(SECOND_FLOOR);
-    }
-    else if (data == THIRD_FLOOR_PRESS)
-    {
-      elevatorLog("THIRD_FLOOR_PRESS CMD ");
-      moveToFloor(THIRD_FLOOR);
-    }
-    else if (data == WHERE_ARE_YOU)
-    {
-      elevatorLog("WHERE_ARE_YOU CMD ");
-      Serial.write(data);
-      pCharacteristic->setValue(&current_pos, sizeof(current_pos));
-      Serial.println();
-    }
-    else if (data == WHAT_STATUS)
-    {
-      elevatorLog("WHAT_STATUS CMD ");
-      Serial.write(data);
-      pCharacteristic->setValue(&current_status, sizeof(current_status));
-      Serial.println();
-    }
-  }
+  if (firstFloorButton.isPressed())
+    onElevatorButtonDown(FIRST_FLOOR);
+  if (secondFloorButton.isPressed())
+    onElevatorButtonDown(SECOND_FLOOR);
+  if (thirdFloorButton.isPressed())
+    onElevatorButtonDown(THIRD_FLOOR);
+  // bluetooth logic
 
   if (SerialBT.available())
   {
@@ -440,11 +368,6 @@ void loop()
       SerialBT.write(digitalToString(triggerSecondFloor.getState()));
       SerialBT.write(digitalToString(triggerThirdFloor.getState()));
     }
-    // else if (data == IDLE_TIME)
-    // {
-    //   Serial.write("IDLE_TIME CMD ");
-    //   SerialBT.println(String(ideTime));
-    // }
     else if (data == WHERE_ARE_YOU)
     {
       elevatorLog("WHERE_ARE_YOU CMD ");
@@ -457,50 +380,40 @@ void loop()
     }
     else if (data == FORCE_STOP)
     {
-      Serial.write("FORCE_STOP CMD ");
+      Serial.write("FORCE STOP BLE CMD ");
       forceStop();
     }
     else if (data == FIRST_FLOOR_PRESS)
     {
-      elevatorLog("FIRST_FLOOR_PRESS CMD ");
+      elevatorLog("FIRST_FLOOR_PRESS BLE CMD ");
       moveToFloor(FIRST_FLOOR);
     }
     else if (data == SECOND_FLOOR_PRESS)
     {
-      elevatorLog("SECOND_FLOOR_PRESS CMD ");
+      elevatorLog("SECOND_FLOOR_PRESS BLE CMD ");
       moveToFloor(SECOND_FLOOR);
     }
     else if (data == THIRD_FLOOR_PRESS)
     {
-      elevatorLog("THIRD_FLOOR_PRESS CMD ");
+      elevatorLog("THIRD_FLOOR_PRESS BLE CMD ");
       moveToFloor(THIRD_FLOOR);
+    }
+    else if (data == DOOR_STATUS)
+    {
+      SerialBT.write(to_char(is_door_close));
+    }
+    else if (data == BOTTOM_STOP_STATUS)
+    {
+      SerialBT.write(digitalToString(bottomStopTrigger.getState()));
     }
     else
     {
       Serial.write(data);
     }
   }
-
-  if (firstFloorButton.isPressed())
+  // send black box data to the mqtt server every 5 seconds
+  if (millis() - lastPingTime > 5000)
   {
-    moveToFloor(FIRST_FLOOR);
-    elevatorLog("ONEST_FLOOR");
-    Serial.println();
-    return;
-  }
-  if (secondFloorButton.isPressed())
-  {
-    moveToFloor(SECOND_FLOOR);
-    elevatorLog("TWOND_FLOOR");
-    Serial.println();
-    return;
-  }
-
-  if (thirdFloorButton.isPressed())
-  {
-    moveToFloor(THIRD_FLOOR);
-    elevatorLog("THREE_FLOOR");
-    Serial.println();
-    return;
+    sendBlackBox();
   }
 }
