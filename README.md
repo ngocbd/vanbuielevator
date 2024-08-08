@@ -22,7 +22,6 @@
     |______|||
 
 - Thang máy gồm 1 động cơ trên nóc tầng 3
-- Thang máy bình thường sẽ nằm ở tầng 2 để không bị vướng lối đi lại ở tầng 1 .
 - Thang máy được cân bằng bằng đối trọng nằng trong ray
 - Thang máy được cố định vào ray, chỉ có thể di chuyển lên và xuống
 - Hệ thống phanh khẩn cấp bằng gia tốc hoặc tốc độ ( cần viết chi tiết )
@@ -37,169 +36,206 @@
 
 ![ Sơ đồ mạch demo ](./wiring-diagram.png)
 
-- Các nút được set up INPUT_PULLUP nên cần nối 1 đầu với GND
-- Cac nut dc dieu khien qua thu vien ezButton
-- Gồm 8 nút 3 nút gọi thang, 3 nút trigger khi thang tới từng tầng, 1 nút trigger cửa thang, 1 nút cho công tắc an toàn ở dưới đáy thang
+## Các thành phần
 
-    - Nút gọi thang 1,2,3 lần lượt là 18,19,21
-    - Nút trigger thang 1,2,3 lần lượt là 25,26,27. Đây là các lẫy được đặt ở tầng 1,2,3 để báo cho thang máy biết
-      thang đã đến tầng nào.
-    - Nút trigger cửa thang là 33 khi nút này được bấm (giữ) (`digitalRead(DOOR_CLOSE_TRIGGER) == LOW`) thì là cừa đang
-      đóng => thang máy được phép di chuyển. Nếu nút này được thả ra (`digitalRead(DOOR_CLOSE_TRIGGER) == HIGH`) thì cửa
-      thang mở thanh máy ko được phép di chuyển
-    - Nút công tắc an toàn ở dưới đáy thang là 32. Khi nút này được bấm thì thang máy sẽ dừng lại ngay lập tức và không
-      được phép di chuyển cho đến khi nút này được thả ra
-    - Buzzer / loa báo hiệu thang đã đến tầng nào: Pin 32. Đây là active buzzer module nên để nó phát ra tiếng cần set
-      `digitalWrite(BUZZER_PIN, HIGH)` và để nó ngưng phát tiếng cần set `digitalWrite(BUZZER_PIN, LOW)`. Xem hàm `playTone()`
-    - 1 motor để demo cho động cơ thang máy
+### 1. Nút gọi thang
 
-- Nút trigger thang sẽ sử dụng limit switch
+- 6 nút thang máy (3 trong cabin, 3 ở các tầng)
+    - 6 nút này cùng chức năng (logic)
+    - Được setup INPUT_PULLUP nên cần nối 1 đầu với GND. Đầu còn lại với esp32 pin
+    - Các nút này sẽ được điều khiển bằng thư viện ezButton (xử lý debounce)
+    - pinout có 4 pin:  1,2 cho led, 3 4 cho công tắc
+    - Led các nút được điều khiển bằng relay
+
+      | pin no |    connect to    |
+                                                                                                                                          |:-------|:----------------:|
+      | 1      |  LED VCC (12v)   | 
+      | 2      |  LED GND (12V)   |   
+      | 3      | ESP 32 (PULL_UP) |
+      | 4      |    ESP 32 GND    |
+
+### 2. Công tắc hành trình mỗi tầng
+
 ![limit-switch-pinout.jpg](./images/limit-switch-pinout.jpg)
-- Wring sẽ như này để code không thay đổi (code đang dùng push button)
 
-| C pin | No Pin                           | NC pin        | ESP32 Input state                      |  
-|-------|----------------------------------|---------------|----------------------------------------|
-| GND   | ESP32 Input Pin (with pull-up)   | not connected | LOW when touched,  HIGH when untouched |  
-- PIN của các nút/côngg tắc
-```C++
-#define ONEST_FLOOR 18  // Nút gọi thang tang 1
-#define TWOND_FLOOR 19  // Nút gọi thang tang 2
-#define THREE_FLOOR 21  // Nút gọi thang tang 3
+- Để xác định thang máy đã đến tầng nào có 3 limit switch(công tắc hành trình mỗi tầng)
+- 3 nút này cũng dùng INPUT_PULLUP với chế độ thường mở (NO)
 
-#define TRIGGER_FIRST_FLOOR_DOWN 25 // Công tắc trigger thang tang 1
-#define TRIGGER_SECOND_FLOOR_DOWN 26 // Công tắc trigger thang tang 2
-#define TRIGGER_THIRD_FLOOR_DOWN 27 // Công tắc trigger thang tang 3
+| C pin | No Pin                         | NC pin        | ESP32 Input state                      |  
+|-------|--------------------------------|---------------|----------------------------------------|
+| GND   | ESP32 Input Pin (with pull-up) | not connected | LOW when touched,  HIGH when untouched |  
 
-#define DOOR_CLOSE_TRIGGER 33  // Công tắc trigger cửa thang
+### 3. Công tắc an toàn ở dưới đáy thang
 
-#define BOTTOM_STOP_TRIGGER 32 // Công tắc an toàn ở dưới đáy thang
-```
-- Cài đặt cơ bản tốc độ cổng serial ( monitor)
+- Dùng để dừng thang máy khi có vật cản ở dưới đáy thang
+- Dùng INPUT_PULLUP với chế độ thường đóng (NC)
+- khi pnw signal = HIGH => Có vật cản => dừng thang máy
 
-```c++
-Serial.begin(115200);
-```
+### 4. Công tắc cửa thang máy
 
-monitor_speed = 115200
+- Dùng để xác định cửa thang máy đã đóng hay chưa
+- Dùng INPUT_PULLUP với chế độ thường mở (NO)
+- Khi cửa đóng => signal = LOW
 
-- Cài đặt điều khiển bằng Bluetooth tên thiết bị là ONGNOI
+### 5. Động cơ kéo thang
 
-```c++
-SerialBT.begin("ONGNOI"); //Bluetooth device name
+- Gồm 2 động cơ tời để kéo thang máy lên / xuống
+- Động cơ này sẽ được điều khiển bằng 2 relay
 
-+ Đối với Web Bluetooth API , cần thêm thư viện Bluetooth Low Energy
-BLEDevice::init("ONGNOI"); // Set the name of the device
- // Create a BLE Service
-  pService = pServer->createService(BLEUUID("Your UUID")); // Service Generic Access
+## PIN Definition
 
-  // Create a BLE Characteristic and add it to Service
-  pCharacteristic = pService->createCharacteristic(
-      BLEUUID("Your UUID"), // Characteristic Device Name
-      BLECharacteristic::PROPERTY_READ |
-      BLECharacteristic::PROPERTY_WRITE
-  );
+### 1. Nút gọi thang
 
+```cpp
+#define ONEST_FLOOR 18
+#define TWOND_FLOOR 19
+#define THREE_FLOOR 21
 
-  // Add Characteristics to Service
-  pService->addCharacteristic(pCharacteristic);
-
-  // Register Service with Server
-  pService->start();
-
-  // Start promoting the name
-  pServer->getAdvertising()->start();
-
+#define ONEST_FLOOR_LED_PIN 13
+#define TWOND_FLOOR_LED_PIN 12
+#define THREE_FLOOR_LED_PIN 14
 ```
 
-- Chân điều khiển động cơ kéo lên là chân 23 ( được setup OUTPUT)
-- Chân điều khiển động cơ nhả xuống là chân 22 ( được setup OUTPUT)
+### 2. Công tắc hành trình mỗi tầng
 
-```C++
-#define ENGINE_UP_PIN 23
-#define ENGINE_DOWN_PIN 22
-
-//Setup pins mode for the engine
-  pinMode(ENGINE_UP_PIN, OUTPUT);
-  pinMode(ENGINE_DOWN_PIN, OUTPUT);
-
-```
-
-- Chân điều nhận tín hiệu từ cảm biến khi đến các tầng 1,2,3 lần lượt là 25,26,27 ( được setup INPUT_PULLDOWN)
-
-```C++
+```cpp
 #define TRIGGER_FIRST_FLOOR_DOWN 25
 #define TRIGGER_SECOND_FLOOR_DOWN 26
 #define TRIGGER_THIRD_FLOOR_DOWN 27
- // setup pins mode for trigger
-  pinMode(TRIGGER_FIRST_FLOOR_DOWN, INPUT_PULLDOWN );
-  pinMode(TRIGGER_SECOND_FLOOR_DOWN, INPUT_PULLDOWN );
-  pinMode(TRIGGER_THIRD_FLOOR_DOWN, INPUT_PULLDOWN );
 ```
 
-- Chân nhận tín hiệu điều khiển các nút ở bên trong thang máy khi đến các tầng 1, 2 ,3 lần lượt là 18,19,21(được setup
-  INPUT_PULLDOWN)
+### 3. Công tắc an toàn ở dưới đáy thang
 
-````C++
-  #define ONEST_FLOOR 18
-  #define TWOND_FLOOR 19
-  #define THREE_FLOOR 21
-  //setup pins mode for button in elevator
-  pinMode(ONEST_FLOOR, INPUT_PULLDOWN);
-  pinMode(TWOND_FLOOR, INPUT_PULLDOWN);
-  pinMode(THREE_FLOOR, INPUT_PULLDOWN);
-``
-- Tập lệnh điều khiển từ Bluetooth
+```cpp
+#define BOTTOM_STOP_TRIGGER 32
+```
 
+### 4. Công tắc cửa thang máy
 
-```c++
+```cpp
+#define DOOR_CLOSE_TRIGGER 33
+```
+
+## Điều khiển qua bluetooth
+
+- Ngoài việc điều khiển thang máy qua nút nhấn, ta cũng có thể điều khiển thang máy qua bluetooth
+- Connect với ESP32 qua bluetooth: `ONGNOI`
+- List lệnh
+
+| cmd |              purpose              |                          return  value |
+|:----|:---------------------------------:|---------------------------------------:|
+| w   |        thang máy tầng  nào        |                            1 or 2 or 3 |
+| s   |       Trạng thái thang máy        | 1(đi lên), 2 (đi xuống), 0 (đứng  yên) |
+| 1   |       Gọi thang lên tầng 1        |                                        |
+| 2   |       Gọi thang lên tầng 2        |                                        |
+| 2   |       Gọi thang lên tầng 3        |                                        |
+| t   | PNW signal của trigger từng tầng  |                       xxx(x is H or L) |
+| f   |            Force  stop            |                                        |
+| d   |          is door close ?          |                        0 (Yes) 1  (No) |
+| d   | PNW signal của công tắc đáy thang |                                 H or L |
+
+```cpp
 #define WHERE_ARE_YOU 'w'
-#define WHAT_STATUS 's'
+#define WHAT_STATUS 's' // ENEGINE UP, DOWN, STOP status
 #define FIRST_FLOOR_PRESS '1'
 #define SECOND_FLOOR_PRESS '2'
 #define THIRD_FLOOR_PRESS '3'
-#define TRIGGER_STATUS 't'
+#define TRIGGER_STATUS 't' // TRIGGER STATUS
+#define FORCE_STOP 'f'
+#define DOOR_STATUS 'd'
+#define BOTTOM_STOP_STATUS 'b'
 ```
 
-- Lệnh w dùng để hỏi xem thang máy đang ở đâu ( kết quả trả về cho thiết bị hỏi là một trong các giá trị 1,2,3 tương ứng với 3 tầng như dưới)
-```c++
-#define FIRST_FLOOR 1
-#define SECOND_FLOOR 2
-#define THIRD_FLOOR 3
+## MQTT for monitoring
 
-if(data == WHERE_ARE_YOU){
-      Serial.write("WHERE_ARE_YOU CMD ");
-      SerialBT.write(to_char(current_pos));
-    }
-
-```
-- Lệnh s dùng để hỏi trạng thái của thang máy ( kết quả sẽ là đang lên, đang xuống , đang đứng yên)
-```c++
-#define UP 1
-#define DOWN 2
-#define STOP 0
-
-if(data == WHAT_STATUS){
-      Serial.write("WHAT_STATUS CMD ");
-      SerialBT.write(to_char(current_status));
-    }
-```
-- Lệnh t dùng để hỏi trạng thái của của các trigger  
-```c++
- if (data == TRIGGER_STATUS) {
-      SerialBT.write(digitalToString(digitalRead(TRIGGER_FIRST_FLOOR_DOWN)));
-      SerialBT.write(digitalToString(digitalRead(TRIGGER_SECOND_FLOOR_DOWN)));
-      SerialBT.write(digitalToString(digitalRead(TRIGGER_THIRD_FLOOR_DOWN)));
-    }
+```cpp
+const char *mqtt_server = "103.199.18.51";
+//logs function
+void elevatorLog(String message)
+{
+  Serial.println(message);
+  mqttLogger.println(message);
+  SerialBT.println(message);
+}
+//blackbox function
+void sendBlackBox()
+{
+  // send the black box data to the mqtt server
+  char blackBoxMessage[110]; // Allocate a buffer for the log message
+  // build json string
+  snprintf(blackBoxMessage, sizeof(blackBoxMessage), "{\"current_pos\": %d, \"current_status\": %d, \"target_floor\": %d, \"is_door_close\": %d, \"is_pausing\": %d}", current_pos, current_status, target_floor, is_door_close, is_pausing);
+  mqttLogger.println(blackBoxMessage);
+  lastPingTime = millis();
+}
 ```
 
+- Do thang máy hay chết lỗi ko rõ lý do nên cần monitor thang máy qua MQTT
+- Logs lại các sự kiện của thang máy, gửi blackbox data mỗi 5s qua MQTT
+- Theo dõi logs qua: https://vanbuielevator-monitor.pages.dev/
+
+## Watchdog
+
+```cpp
+  // init wdt
+  esp_task_wdt_init(WDT_TIMEOUT, true); // enable panic so ESP32 restarts
+  esp_task_wdt_add(NULL);
+```
+
+- Xuất hiện lỗi treo mạch khi để lâu
+- Implement watchdog để reset mạch khi treo (sau 30s nếu hàm `loop()`  ko chạy)
 
 ## Quá trình vận hành
-### Quá trình vận hành thang máy cần 3 giai đoạn 
+
 1. Gọi thang máy đến tầng X ( thang máy có thể đang ở bất kỳ đâu)
 2. Người lên => Vận chuyển đến tầng Y ( bước 1 và 2 có thể xảy ra nhiều lần)
-3. Thang máy rảnh và tự trở về tầng 2 ngủ
 
-### Tạm thời
-1. Tạm thời chưa làm chức năng chọn tầng khi di chuyển , dùng tạm chức năng gọi thang để di chuyển
-2. Tạm thời khi trigger được bặt nó sẽ dừng mà không cần biết tầng cần di chuyển là tầng nào do (1)
-3. Tạm thời chưa có bộ đếm thời gian để tính khi nào sẽ chuyển thang máy sang trạng thái ngủ (Chuyển về tầng 2)
+## Bảo hiểm an toàn
+
+- Gồm 2 công tắc kịch trần chạm đáy tác động cơ học lên động cơ đẻ dừng động cơ ko qua esp32
+- Cầu chì đảm bảo ko cho động cơ lên và xuống chạy cùng lúc
+- Công tắc an tòàn đáy thang
+- Công tắc cửa thang
+```cpp
+void elevatorSecurityCheck()
+{
+  // when the trigger at the bottom of the elevator is pressed (meaning some  obstacle is in the way) stop the elevator
+  if (bottomStopTrigger.getState() == HIGH || doorCloseTrigger.getState() == HIGH)
+  {
+    // elevatorLog("pausing");
+    // Serial.println("pausing");
+    digitalWrite(ENGINE_UP_PIN, LOW);
+    digitalWrite(ENGINE_DOWN_PIN, LOW);
+    is_pausing = 1;
+  }
+  // continue the elevator when the obstacle is removed and the door is closed
+  if (is_pausing == 1 && bottomStopTrigger.getState() == LOW && doorCloseTrigger.getState() == LOW)
+  {
+    if (current_status == UP)
+    {
+
+      delay(1000);
+      digitalWrite(ENGINE_UP_PIN, HIGH);
+      digitalWrite(ENGINE_DOWN_PIN, LOW);
+    }
+    if (current_status == DOWN)
+    {
+      delay(1000);
+      digitalWrite(ENGINE_DOWN_PIN, HIGH);
+      digitalWrite(ENGINE_UP_PIN, LOW);
+    }
+    is_pausing = 0;
+  }
+} 
+```
+## Quyền sudo
+
+- Điều khiển động cơ lên xuống dừng qua sóng radio bằng điều khiển từ xa
+- Không cần qua mạch =>  độ tin cậy cao nhất
+
+## Các vấn đề cần giải quyết
+
+- Lỗi treo mạch  (đã fix tạm bằng cách thêm wathdog)
+- Thang tự lên tầng 3 sau 1 2h ngồi im (đang tìm hiểu)
+- Led nút gọi thang (đã code logic cần đi dây thực tiễn)
+- Quản trị vaf điều khiển qua Internet: web, telegram (đang làm)
+- Phát audio khi thang máy đến tầng (chưa làm)
