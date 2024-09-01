@@ -4,6 +4,7 @@
 #include <PubSubClient.h>
 #include <MqttLogger.h>
 #include <string.h>
+#include <esp_task_wdt.h>
 
 const char *ssid = "Van Phien";
 const char *password = "25122013";
@@ -103,6 +104,9 @@ BluetoothSerial SerialBT;
 #define BOTTOM_STOP_TRIGGER 32
 
 #define DEBOUNCE_TIME 50 // the debounce time in millisecond, increase this time if it still chatters
+
+#define WDT_TIMEOUT 30 // 30 seconds WDT
+
 byte current_pos = FIRST_FLOOR;
 byte current_status = STOP;
 byte target_floor = 0;
@@ -117,7 +121,7 @@ ezButton triggerSecondFloor(TRIGGER_SECOND_FLOOR_DOWN);
 ezButton triggerThirdFloor(TRIGGER_THIRD_FLOOR_DOWN);
 ezButton doorCloseTrigger(DOOR_CLOSE_TRIGGER);
 ezButton bottomStopTrigger(BOTTOM_STOP_TRIGGER);
-
+byte isSystemStartLogSent = 0;
 void elevatorLog(String message)
 {
   Serial.println(message);
@@ -156,6 +160,11 @@ void setup()
 
   // mqtt client
   client.setServer(mqtt_server, 1883);
+
+  // init wdt
+  esp_task_wdt_init(WDT_TIMEOUT, true); // enable panic so ESP32 restarts
+  esp_task_wdt_add(NULL);
+  Serial.println("System started");
 }
 
 char to_char(byte data)
@@ -275,9 +284,13 @@ void onTriggerFloorDown(int floor)
 {
   char logMessage[50]; // Allocate a buffer for the log message
   snprintf(logMessage, sizeof(logMessage), "Trigger at floor %d is pressed", floor);
-  current_pos = floor;
-  elevatorLog(logMessage);
 
+  elevatorLog(logMessage);
+  // only update the current position when the elevator is moving
+  if (current_status != STOP)
+  {
+    current_pos = floor;
+  }
   if ((target_floor == floor))
   {
     forceStop();
@@ -315,7 +328,7 @@ void sendBlackBox()
 {
   // send the black box data to the mqtt server
   char blackBoxMessage[110]; // Allocate a buffer for the log message
-  //build json string
+  // build json string
   snprintf(blackBoxMessage, sizeof(blackBoxMessage), "{\"current_pos\": %d, \"current_status\": %d, \"target_floor\": %d, \"is_door_close\": %d, \"is_pausing\": %d}", current_pos, current_status, target_floor, is_door_close, is_pausing);
   mqttLogger.println(blackBoxMessage);
   lastPingTime = millis();
@@ -323,6 +336,8 @@ void sendBlackBox()
 
 void loop()
 {
+  // reset wdt
+  esp_task_wdt_reset();
   firstFloorButton.loop();
   secondFloorButton.loop();
   thirdFloorButton.loop();
@@ -335,6 +350,11 @@ void loop()
   if (!client.connected())
   {
     reconnect();
+  }
+  if (!isSystemStartLogSent)
+  {
+    elevatorLog("System started");
+    isSystemStartLogSent = 1;
   }
   elevatorSecurityCheck();
   // physical buttons logic
